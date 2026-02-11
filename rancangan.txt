@@ -1,0 +1,72 @@
+Final Rancangan (Blue Print) lengkap untuk proyek backend transaksi pembayaran kamu. Rancangan ini menggabungkan Clean Architecture, Docker, PostgreSQL, dan strategi testing Postman dalam satu kesatuan.
+
+1. Arsitektur Akhir (The High-Level View)
+Aplikasi ini akan berjalan dengan alur: Postman (Client) -> Go Server (Clean Architecture) -> PostgreSQL (Docker).
+
+2. Struktur Folder Final
+Plaintext
+payment-service/
+├── cmd/
+│   └── api/
+│       └── main.go           # Entry point & Dependency Injection
+├── internal/
+│   ├── domain/               # Entity & Interface
+│   │   ├── wallet.go
+│   │   └── transaction.go
+│   ├── usecase/              # Business Logic
+│   │   └── payment_uc.go
+│   ├── repository/           # SQL Implementation
+│   │   └── postgres_repo.go
+│   └── delivery/             # HTTP Handlers
+│       └── http_handler.go
+├── migrations/               # Database Schema (.sql)
+│   └── 000001_init_schema.up.sql
+├── docker-compose.yml        # Docker Infrastructure
+├── go.mod
+└── .env                      # Database Credentials
+3. Skema Database (DDL)
+Simpan di migrations/000001_init_schema.up.sql. Ini yang akan kamu jalankan di dalam Docker.
+
+SQL
+CREATE TABLE users (
+    id UUID PRIMARY KEY,
+    username VARCHAR(50) UNIQUE NOT NULL
+);
+
+CREATE TABLE wallets (
+    id UUID PRIMARY KEY,
+    user_id UUID REFERENCES users(id),
+    balance BIGINT DEFAULT 0 CHECK (balance >= 0), -- Constraint Saldo Negatif
+    version INT DEFAULT 1 -- Untuk Concurrency Control
+);
+
+CREATE TABLE transactions (
+    id UUID PRIMARY KEY,
+    reference_id VARCHAR(100) UNIQUE, -- Idempotency Key
+    sender_id UUID REFERENCES users(id),
+    receiver_id UUID REFERENCES users(id),
+    amount BIGINT NOT NULL,
+    status VARCHAR(20),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+4. Business Logic Flow (Usecase)
+Logika utama yang akan kamu tulis di Go untuk memastikan transaksi aman:
+
+Begin Transaction: Mulai sesi database.
+
+Locking: Ambil saldo pengirim dengan SELECT ... FOR UPDATE (mencegah dua transaksi di detik yang sama mengacaukan saldo).
+
+Validation: Cek apakah saldo cukup.
+
+Update:
+
+Kurangi saldo pengirim.
+
+Tambah saldo penerima.
+
+Simpan record ke tabel transactions.
+
+Commit: Jika semua sukses, simpan permanen.
+
+5. Setup Infrastruktur (Docker)
+Cukup jalankan satu perintah ini di terminal untuk menyalakan database: docker-compose up -d
