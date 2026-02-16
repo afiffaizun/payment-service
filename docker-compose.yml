@@ -11,4 +11,18 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - ./migrations:/docker-entrypoint-initdb.d # Jalankan SQL otomatis saat container dibuat
+      - ./migrations:/docker-entrypoint-initdb.d
+
+  app:
+    build: .
+    container_name: payment_app
+    ports:
+      - "8080:8080"
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: user_payment
+      DB_PASSWORD: pass_payment
+      DB_NAME: db_payment
+    depends_on:
+      - db
