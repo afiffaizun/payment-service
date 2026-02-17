@@ -32,6 +32,11 @@ The database will be available at `localhost:5432` with:
 go mod tidy
 go run ./cmd/api/main.go
 ```
+# Troubleshooting
+```
+lsof -i :8080
+kill -9 <PID>
+```
 
 The server will start on `http://localhost:8080`
 
@@ -72,6 +77,26 @@ Get transaction details by reference ID.
   "Amount": 5000,
   "Status": "completed",
   "CreatedAt": "2026-02-16T13:36:02.772427148+07:00"
+}
+```
+
+### POST /topup
+Top-up a user's wallet.
+
+**Request:**
+```json
+{
+  "user_id": "11111111-1111-1111-1111-111111111111",
+  "amount": 10000
+}
+```
+
+**Response:**
+```json
+{
+  "UserID": "11111111-1111-1111-1111-111111111111",
+  "Amount": 10000,
+  "Balance": 1010000
 }
 ```
 
@@ -133,6 +158,121 @@ curl -X POST http://localhost:8080/transfer \
 ```
 Expected: `"error":"amount must be greater than zero"`
 
+### Test 6: Top-up Wallet
+```bash
+curl -X POST http://localhost:8080/topup \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "11111111-1111-1111-1111-111111111111",
+    "amount": 10000
+  }'
+```
+Expected: `{"UserID":"11111111-1111-1111-1111-111111111111","Amount":10000,"Balance":...}`
+
+## Testing with Postman
+
+### 1. Start the Services
+
+**Option A: Using Docker (Recommended)**
+```bash
+docker compose up -d
+```
+
+**Option B: Manual**
+```bash
+docker compose up -d db      # Start database only
+go run ./cmd/api/main.go     # Run application
+```
+
+### 2. Import to Postman
+
+Create a new Collection called "Payment Service" with these requests:
+
+---
+
+#### Request 1: Health Check
+- **Method:** GET
+- **URL:** `http://localhost:8080/`
+- **Expected:** `Payment Service is running`
+
+---
+
+#### Request 2: Transfer Funds
+- **Method:** POST
+- **URL:** `http://localhost:8080/transfer`
+- **Headers:** `Content-Type: application/json`
+- **Body (raw JSON):**
+```json
+{
+  "sender_id": "11111111-1111-1111-1111-111111111111",
+  "receiver_id": "22222222-2222-2222-2222-222222222222",
+  "amount": 5000,
+  "reference": "tx-001"
+}
+```
+- **Expected Response:**
+```json
+{
+  "TransactionID": "...",
+  "Reference": "tx-001",
+  "Amount": 5000,
+  "Status": "completed",
+  "CreatedAt": "..."
+}
+```
+
+---
+
+#### Request 3: Get Transaction
+- **Method:** GET
+- **URL:** `http://localhost:8080/transaction/tx-001`
+
+---
+
+#### Request 4: Top-up Wallet
+- **Method:** POST
+- **URL:** `http://localhost:8080/topup`
+- **Headers:** `Content-Type: application/json`
+- **Body (raw JSON):**
+```json
+{
+  "user_id": "11111111-1111-1111-1111-111111111111",
+  "amount": 10000
+}
+```
+- **Expected Response:**
+```json
+{
+  "UserID": "11111111-1111-1111-1111-111111111111",
+  "Amount": 10000,
+  "Balance": "..."
+}
+```
+
+---
+
+### 3. Test Scenarios
+
+| Scenario | Expected Result |
+|----------|-----------------|
+| **Test 1:** Transfer with insufficient balance (Bob has 50k, try to send 100k) | `"error":"insufficient balance"` |
+| **Test 2:** Duplicate reference ID (use tx-001 again) | `"error":"reference ID already exists"` |
+| **Test 3:** Negative amount (for transfer) | `"error":"amount must be greater than zero"` |
+| **Test 4:** Negative amount (for top-up) | `"error":"amount must be greater than zero"` |
+
+---
+
+### 4. Dummy Data Available
+
+- **Alice:** `11111111-1111-1111-1111-111111111111` (Balance: 1,000,000)
+- **Bob:** `22222222-2222-2222-2222-222222222222` (Balance: 50,000)
+
+---
+
+### 5. Postman Collection Export (Optional)
+
+You can create a Postman collection and export it for sharing with your team.
+
 ## Dummy Data
 
 The database comes with pre-seeded data for testing:
@@ -182,3 +322,46 @@ payment-service/
 - ✅ Idempotency using reference IDs
 - ✅ Balance validation (no negative balance)
 - ✅ Clean Architecture (Domain → Usecase → Repository → Delivery)
+
+## Troubleshooting
+
+```
+lsof -i :8080
+kill -9 <PID>
+```
+
+## GUI Postgres
+Connect with:
+- Host: localhost
+- Port: 5432
+- Database: db_payment
+- User: user_payment
+- Password: pass_payment
+
+### Cek isi di docker
+- docker exec payment-service-db-1 psql -U user_payment -d db_payment -c "\dt"
+
+---
+D. End-to-End Testing
+1. Start Services:
+docker-compose up -d db
+go run cmd/api/main.go
+2. Test Scenarios:
+# Test 1: TopUp berhasil
+curl -X POST http://localhost:8080/topup \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "11111111-1111-1111-1111-111111111111",
+    "amount": 50000
+  }'
+# Expected: {"user_id":"...","new_balance":1050000}
+# Test 2: TopUp dengan amount 0
+curl -X POST http://localhost:8080/topup \
+  -H "Content-Type: application/json" \
+  -d '{"user_id":"11111111-1111-1111-1111-111111111111","amount":0}'
+# Expected: 400 Bad Request, "amount must be greater than zero"
+# Test 3: TopUp user tidak ada
+curl -X POST http://localhost:8080/topup \
+  -H "Content-Type: application/json" \
+  -d '{"user_id":"99999999-9999-9999-9999-999999999999","amount":1000}'
+# Expected: 404 Not Found

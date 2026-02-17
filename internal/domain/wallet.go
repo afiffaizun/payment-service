@@ -27,4 +27,5 @@ type TransactionRepository interface {
 	BeginTx() (interface{}, error)
 	CommitTx(tx interface{}) error
 	RollbackTx(tx interface{}) error
+	TopUpWallet(tx interface{}, userID string, amount int64) error
 }

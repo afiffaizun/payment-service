@@ -72,3 +72,22 @@ func (r *PostgresRepo) GetTransactionByRef(refID string) (*domain.Transaction, e
 	}
 	return &t, nil
 }
+
+func (r *PostgresRepo) TopUpWallet(tx interface{}, userID string, amount int64) error {
+	sqlTx, ok := tx.(*sql.Tx)
+	if !ok {
+		return fmt.Errorf("invalid transaction type")
+	}
+
+	wallet, err := r.GetWalletForUpdate(sqlTx, userID)
+	if err != nil {
+		return err
+	}
+
+	err = r.UpdateWalletBalance(sqlTx, wallet.ID, amount)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+

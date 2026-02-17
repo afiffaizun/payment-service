@@ -38,6 +38,17 @@ type TransferResponse struct {
 	CreatedAt     time.Time
 }
 
+type TopUpRequest struct {
+	UserID string `json:"user_id"`
+	Amount int64  `json:"amount"`
+}
+
+type TopUpResponse struct {
+	UserID  string
+	Amount  int64
+	Balance int64
+}
+
 func (u *PaymentUsecase) TransferFunds(req TransferRequest) (*TransferResponse, error) {
 	if req.Amount <= 0 {
 		return nil, ErrInvalidAmount
@@ -125,3 +136,37 @@ func (u *PaymentUsecase) GetTransactionByRef(refID string) (*TransferResponse, e
 		CreatedAt:     tx.CreatedAt,
 	}, nil
 }
+
+func (u *PaymentUsecase) TopUpWallet(req TopUpRequest) (*TopUpResponse, error) {
+	if req.Amount <= 0 {
+		return nil, ErrInvalidAmount
+	}
+
+	tx, err := u.repo.BeginTx()
+	if err != nil {
+		return nil, err
+	}
+	defer u.repo.RollbackTx(tx)
+
+	err = u.repo.TopUpWallet(tx, req.UserID, req.Amount)
+	if err != nil {
+		return nil, err
+	}
+
+	wallet, err := u.repo.GetWalletForUpdate(tx, req.UserID) // Get the updated wallet to return the new balance
+	if err != nil {
+		return nil, err
+	}
+
+	err = u.repo.CommitTx(tx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &TopUpResponse{
+		UserID:  req.UserID,
+		Amount:  req.Amount,
+		Balance: wallet.Balance,
+	}, nil
+}
+

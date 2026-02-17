@@ -42,7 +42,15 @@ func main() {
 	handler := delivery.NewHttpHandler(uc)
 
 	r := chi.NewRouter()
+
+	// Tambahkan health check endpoint
+	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+	    w.WriteHeader(http.StatusOK)
+	    w.Write([]byte("Payment Service is running"))
+	})
+	
 	r.Post("/transfer", handler.Transfer)
+	r.Post("/topup", handler.TopUp)
 	r.Get("/transaction/{refId}", handler.GetTransaction)
 
 	log.Println("Starting server on :8080")
