@@ -124,37 +124,213 @@ Get wallet details by user ID.
 
 ## Testing
 
-### Test 1: Successful Transfer
+This section provides comprehensive testing instructions covering unit tests, integration tests, and end-to-end (E2E) testing.
+
+### Prerequisites
+
+Before running tests, ensure you have:
+- Go 1.25 or higher installed
+- Docker & Docker Compose running
+- PostgreSQL accessible at `localhost:5432`
+- Port 8080 available for the application
+
+---
+
+### 1. Unit Testing
+
+Unit tests are located in `internal/usecase/payment_uc_test.go` and use mocked repositories.
+
+**Run all unit tests:**
+```bash
+go test -v ./internal/usecase/...
+```
+
+**Run with coverage report:**
+```bash
+go test -cover ./internal/usecase/...
+```
+
+**Run specific test:**
+```bash
+go test -v ./internal/usecase/... -run TestTransferFunds
+go test -v ./internal/usecase/... -run TestTopUpWallet
+```
+
+**Available Unit Tests:**
+- ✅ `TestTransferFunds_Success` - Successful money transfer
+- ✅ `TestTransferFunds_InsufficientBalance` - Insufficient balance error
+- ✅ `TestTransferFunds_InvalidAmount` - Invalid (zero/negative) amount
+- ✅ `TestTransferFunds_SameUser` - Transfer to same user error
+- ✅ `TestTransferFunds_DuplicateReference` - Duplicate reference ID
+- ✅ `TestTopUpWallet_Success` - Successful wallet top-up
+- ✅ `TestTopUpWallet_InvalidAmount` - Invalid top-up amount
+- ✅ `TestGetWallet_Success` - Get wallet details
+- ✅ `TestGetWallet_NotFound` - Wallet not found error
+
+---
+
+### 2. Integration Testing
+
+Integration tests are located in `internal/repository/postgres_repo_test.go` and require a running PostgreSQL database.
+
+**Start test database:**
+```bash
+docker-compose up -d db
+```
+
+**Run integration tests:**
+```bash
+go test -v ./internal/repository/...
+```
+
+**Run specific integration test:**
+```bash
+go test -v ./internal/repository/... -run TestPostgresRepo_TopUpWallet
+```
+
+**Available Integration Tests:**
+- ✅ `TestPostgresRepo_TopUpWallet_Success` - Top-up wallet in database
+- ✅ `TestPostgresRepo_TopUpWallet_UserNotFound` - Top-up non-existent user
+- ✅ `TestPostgresRepo_GetWalletByUserID_Success` - Get wallet from database
+- ✅ `TestPostgresRepo_GetWalletByUserID_NotFound` - Get non-existent wallet
+- ✅ `TestPostgresRepo_GetTransactionByRef_Success` - Get transaction by reference
+
+---
+
+### 3. End-to-End Testing (Manual)
+
+E2E tests verify the complete flow from HTTP request through all layers to the database.
+
+#### Setup
+
+```bash
+# 1. Start database
+docker-compose up -d db
+
+# 2. Run application
+go run ./cmd/api/main.go
+
+# 3. Verify application is running
+curl http://localhost:8080/
+# Expected: "Payment Service is running"
+```
+
+#### Test Scenarios
+
+##### Test 1: Health Check
+```bash
+curl http://localhost:8080/
+```
+**Expected:** `Payment Service is running`
+
+---
+
+##### Test 2: Get Alice's Wallet
+```bash
+curl http://localhost:8080/wallet/11111111-1111-1111-1111-111111111111
+```
+**Expected:**
+```json
+{
+  "wallet_id": "...",
+  "user_id": "11111111-1111-1111-1111-111111111111",
+  "balance": 1000000,
+  "version": 0,
+  "created_at": "...",
+  "updated_at": "..."
+}
+```
+
+---
+
+##### Test 3: Top-up Alice's Wallet
+```bash
+curl -X POST http://localhost:8080/topup \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "11111111-1111-1111-1111-111111111111",
+    "amount": 50000
+  }'
+```
+**Expected:**
+```json
+{
+  "UserID": "11111111-1111-1111-1111-111111111111",
+  "Amount": 50000,
+  "Balance": 1050000
+}
+```
+
+---
+
+##### Test 4: Verify Top-up (Check Balance)
+```bash
+curl http://localhost:8080/wallet/11111111-1111-1111-1111-111111111111
+```
+**Expected:** `balance` = 1050000
+
+---
+
+##### Test 5: Transfer Funds (Alice to Bob)
 ```bash
 curl -X POST http://localhost:8080/transfer \
   -H "Content-Type: application/json" \
   -d '{
     "sender_id": "11111111-1111-1111-1111-111111111111",
     "receiver_id": "22222222-2222-2222-2222-222222222222",
-    "amount": 5000,
-    "reference": "tx-001"
+    "amount": 10000,
+    "reference": "tx-test-001"
   }'
 ```
+**Expected:**
+```json
+{
+  "TransactionID": "...",
+  "Reference": "tx-test-001",
+  "Amount": 10000,
+  "Status": "completed",
+  "CreatedAt": "..."
+}
+```go test -v ./internal/repository/... -run TestPostgresRepo_TopUpWallet
 
-### Test 2: Get Transaction
+
+---
+
+##### Test 6: Verify Transfer (Check Balances)
 ```bash
-curl http://localhost:8080/transaction/tx-001
+# Alice's balance should be 1040000
+curl http://localhost:8080/wallet/11111111-1111-1111-1111-111111111111
+
+# Bob's balance should be 60000
+curl http://localhost:8080/wallet/22222222-2222-2222-2222-222222222222
 ```
 
-### Test 3: Insufficient Balance
+---
+
+##### Test 7: Get Transaction
+```bash
+curl http://localhost:8080/transaction/tx-test-001
+```
+**Expected:** Transaction details with `Reference`: "tx-test-001"
+
+---
+
+##### Test 8: Error - Insufficient Balance
 ```bash
 curl -X POST http://localhost:8080/transfer \
   -H "Content-Type: application/json" \
   -d '{
     "sender_id": "22222222-2222-2222-2222-222222222222",
     "receiver_id": "11111111-1111-1111-1111-111111111111",
-    "amount": 1000000,
-    "reference": "tx-002"
+    "amount": 100000,
+    "reference": "tx-fail-001"
   }'
 ```
-Expected: `"error":"insufficient balance"`
+**Expected:** `{"error":"insufficient balance"}` (HTTP 400)
 
-### Test 4: Duplicate Reference (Idempotency)
+---
+
+##### Test 9: Error - Duplicate Reference (Idempotency)
 ```bash
 curl -X POST http://localhost:8080/transfer \
   -H "Content-Type: application/json" \
@@ -162,12 +338,14 @@ curl -X POST http://localhost:8080/transfer \
     "sender_id": "11111111-1111-1111-1111-111111111111",
     "receiver_id": "22222222-2222-2222-2222-222222222222",
     "amount": 1000,
-    "reference": "tx-001"
+    "reference": "tx-test-001"
   }'
 ```
-Expected: `"error":"reference ID already exists"`
+**Expected:** `{"error":"reference ID already exists"}` (HTTP 400)
 
-### Test 5: Invalid Amount
+---
+
+##### Test 10: Error - Invalid Amount (Negative)
 ```bash
 curl -X POST http://localhost:8080/transfer \
   -H "Content-Type: application/json" \
@@ -175,33 +353,209 @@ curl -X POST http://localhost:8080/transfer \
     "sender_id": "11111111-1111-1111-1111-111111111111",
     "receiver_id": "22222222-2222-2222-2222-222222222222",
     "amount": -100,
-    "reference": "tx-003"
+    "reference": "tx-fail-002"
   }'
 ```
-Expected: `"error":"amount must be greater than zero"`
+**Expected:** `{"error":"amount must be greater than zero"}` (HTTP 400)
 
-### Test 6: Top-up Wallet
+---
+
+##### Test 11: Error - Wallet Not Found
+```bash
+curl http://localhost:8080/wallet/99999999-9999-9999-9999-999999999999
+```
+**Expected:** `{"error":"wallet not found"}` (HTTP 404)
+
+---
+
+##### Test 12: Error - Invalid Top-up Amount
 ```bash
 curl -X POST http://localhost:8080/topup \
   -H "Content-Type: application/json" \
   -d '{
     "user_id": "11111111-1111-1111-1111-111111111111",
-    "amount": 10000
+    "amount": 0
   }'
 ```
-Expected: `{"UserID":"11111111-1111-1111-1111-111111111111","Amount":10000,"Balance":...}`
+**Expected:** `{"error":"amount must be greater than zero"}` (HTTP 400)
 
-### Test 7: Get Wallet
-```bash
-curl http://localhost:8080/wallet/11111111-1111-1111-1111-111111111111
-```
-Expected: `{"wallet_id":"...","user_id":"11111111-1111-1111-1111-111111111111","balance":...,"created_at":"...","updated_at":"..."}`
+---
 
-### Test 8: Get Wallet - Not Found
-```bash
-curl http://localhost:8080/wallet/99999999-9999-9999-9999-999999999999
+### 4. Test Scenarios Summary
+
+| # | Test Case | Endpoint | Method | Expected Result |
+|---|-----------|----------|--------|-----------------|
+| 1 | Health Check | `/` | GET | `Payment Service is running` |
+| 2 | Get Wallet | `/wallet/{userId}` | GET | Wallet details with timestamps |
+| 3 | Top-up Wallet | `/topup` | POST | Balance increased |
+| 4 | Verify Top-up | `/wallet/{userId}` | GET | Updated balance |
+| 5 | Transfer Funds | `/transfer` | POST | Transaction completed |
+| 6 | Verify Transfer | `/wallet/{userId}` | GET | Both balances updated |
+| 7 | Get Transaction | `/transaction/{refId}` | GET | Transaction details |
+| 8 | Insufficient Balance | `/transfer` | POST | `error: insufficient balance` (400) |
+| 9 | Duplicate Reference | `/transfer` | POST | `error: reference ID already exists` (400) |
+| 10 | Invalid Amount | `/transfer` | POST | `error: amount must be greater than zero` (400) |
+| 11 | Wallet Not Found | `/wallet/{userId}` | GET | `error: wallet not found` (404) |
+| 12 | Invalid Top-up | `/topup` | POST | `error: amount must be greater than zero` (400) |
+
+---
+
+### 5. Postman Collection Setup
+
+#### Collection Structure
+
+Create a Collection called **"Payment Service"** with folders:
+
+**Folder: Health & Info**
+- Health Check (GET /)
+
+**Folder: Wallet Operations**
+- Get Wallet (GET /wallet/{userId})
+- Top-up Wallet (POST /topup)
+
+**Folder: Transfer Operations**
+- Transfer Funds (POST /transfer)
+- Get Transaction (GET /transaction/{refId})
+
+**Folder: Error Cases**
+- Insufficient Balance (POST /transfer)
+- Duplicate Reference (POST /transfer)
+- Invalid Amount (POST /transfer)
+- Wallet Not Found (GET /wallet/{userId})
+
+#### Environment Variables
+
+Create an Environment with these variables:
 ```
-Expected: `{"error":"wallet not found"}`
+BASE_URL: http://localhost:8080
+ALICE_USER_ID: 11111111-1111-1111-1111-111111111111
+BOB_USER_ID: 22222222-2222-2222-2222-222222222222
+```
+
+#### Example Request Configuration
+
+**Get Wallet:**
+- **Method:** GET
+- **URL:** `{{BASE_URL}}/wallet/{{ALICE_USER_ID}}`
+- **Tests:**
+```javascript
+pm.test("Status code is 200", function () {
+    pm.response.to.have.status(200);
+});
+pm.test("Response has wallet_id", function () {
+    var jsonData = pm.response.json();
+    pm.expect(jsonData).to.have.property('wallet_id');
+    pm.expect(jsonData).to.have.property('balance');
+});
+```
+
+**Transfer Funds:**
+- **Method:** POST
+- **URL:** `{{BASE_URL}}/transfer`
+- **Headers:** `Content-Type: application/json`
+- **Body:**
+```json
+{
+  "sender_id": "{{ALICE_USER_ID}}",
+  "receiver_id": "{{BOB_USER_ID}}",
+  "amount": 5000,
+  "reference": "tx-{{$timestamp}}"
+}
+```
+
+---
+
+### 6. Troubleshooting Tests
+
+#### Problem: Port 8080 already in use
+```bash
+# Find process using port 8080
+lsof -i :8080
+
+# Kill the process
+kill -9 <PID>
+```
+
+#### Problem: Database connection refused
+```bash
+# Check if database container is running
+docker-compose ps
+
+# Restart database
+docker-compose restart db
+
+# Check logs
+docker-compose logs db
+```
+
+#### Problem: Tests failing with "no rows in result set"
+Database seed data might be missing. Reset the database:
+```bash
+docker-compose down -v
+docker-compose up -d db
+```
+
+#### Problem: Unit tests fail with mock errors
+Ensure all dependencies are installed:
+```bash
+go mod tidy
+go mod download
+```
+
+#### Problem: Permission denied when running test script
+```bash
+chmod +x run-tests.sh
+```
+
+#### Problem: PostgreSQL authentication failed
+Check environment variables match docker-compose.yml:
+```bash
+export DB_HOST=localhost
+export DB_PORT=5432
+export DB_USER=user_payment
+export DB_PASSWORD=pass_payment
+export DB_NAME=db_payment
+```
+
+---
+
+### 7. Quick Test Checklist
+
+Before committing changes, run through this checklist:
+
+- [ ] **Unit Tests:** `go test ./internal/usecase/...` - All pass
+- [ ] **Integration Tests:** `go test ./internal/repository/...` - All pass
+- [ ] **Build:** `go build ./cmd/api/main.go` - No errors
+- [ ] **Health Check:** `curl http://localhost:8080/` - Returns "Payment Service is running"
+- [ ] **Get Wallet:** Returns wallet with correct balance and timestamps
+- [ ] **Top-up:** Increases balance correctly
+- [ ] **Transfer:** Completes successfully and updates both balances
+- [ ] **Error Handling:** All error cases return appropriate status codes and messages
+- [ ] **Idempotency:** Duplicate reference returns error
+
+---
+
+### 8. Reset Test Data
+
+To reset database to initial state with dummy data:
+
+```bash
+# Stop and remove containers
+docker-compose down -v
+
+# Start fresh
+docker-compose up -d db
+
+# Wait for database to initialize
+sleep 5
+
+# Verify tables and data
+docker exec payment-service-db-1 psql -U user_payment -d db_payment -c "SELECT * FROM wallets;"
+```
+
+**Initial Dummy Data:**
+- **Alice:** `11111111-1111-1111-1111-111111111111` - Balance: 1,000,000
+- **Bob:** `22222222-2222-2222-2222-222222222222` - Balance: 50,000
 
 ## Testing with Postman
 
