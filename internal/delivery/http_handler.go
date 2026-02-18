@@ -64,6 +64,22 @@ func (h *HttpHandler) TopUp(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, resp)
 }
 
+func (h *HttpHandler) GetWallet(w http.ResponseWriter, r *http.Request) {
+	userID := chi.URLParam(r, "userId")
+	if userID == "" {
+		respondWithError(w, http.StatusBadRequest, "user ID is required")
+		return
+	}
+
+	resp, err := h.uc.GetWallet(userID)
+	if err != nil {
+		respondWithError(w, http.StatusNotFound, "wallet not found")
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, resp)
+}
+
 func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)

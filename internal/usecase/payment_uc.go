@@ -49,6 +49,15 @@ type TopUpResponse struct {
 	Balance int64
 }
 
+type GetWalletResponse struct {
+	WalletID  string    `json:"wallet_id"`
+	UserID    string    `json:"user_id"`
+	Balance   int64     `json:"balance"`
+	Version   int       `json:"version"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 func (u *PaymentUsecase) TransferFunds(req TransferRequest) (*TransferResponse, error) {
 	if req.Amount <= 0 {
 		return nil, ErrInvalidAmount
@@ -170,3 +179,18 @@ func (u *PaymentUsecase) TopUpWallet(req TopUpRequest) (*TopUpResponse, error) {
 	}, nil
 }
 
+func (u *PaymentUsecase) GetWallet(userID string) (*GetWalletResponse, error) {
+	wallet, err := u.repo.GetWalletByUserID(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &GetWalletResponse{
+		WalletID:  wallet.ID,
+		UserID:    wallet.UserID,
+		Balance:   wallet.Balance,
+		Version:   wallet.Version,
+		CreatedAt: wallet.CreatedAt,
+		UpdatedAt: wallet.UpdatedAt,
+	}, nil
+}

@@ -3,10 +3,12 @@ package domain
 import "time"
 
 type Wallet struct {
-	ID      string
-	UserID  string
-	Balance int64
-	Version int
+	ID        string
+	UserID    string
+	Balance   int64
+	Version   int
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 type Transaction struct {
@@ -28,4 +30,5 @@ type TransactionRepository interface {
 	CommitTx(tx interface{}) error
 	RollbackTx(tx interface{}) error
 	TopUpWallet(tx interface{}, userID string, amount int64) error
+	GetWalletByUserID(userID string) (*Wallet, error)
 }

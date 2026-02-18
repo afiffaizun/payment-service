@@ -100,6 +100,28 @@ Top-up a user's wallet.
 }
 ```
 
+### GET /wallet/{userId}
+Get wallet details by user ID.
+
+**Response:**
+```json
+{
+  "wallet_id": "aaaaaaaa-1111-1111-1111-111111111111",
+  "user_id": "11111111-1111-1111-1111-111111111111",
+  "balance": 1010000,
+  "version": 1,
+  "created_at": "2024-01-10T08:00:00Z",
+  "updated_at": "2024-01-15T14:30:00Z"
+}
+```
+
+**Error Response (404):**
+```json
+{
+  "error": "wallet not found"
+}
+```
+
 ## Testing
 
 ### Test 1: Successful Transfer
@@ -168,6 +190,18 @@ curl -X POST http://localhost:8080/topup \
   }'
 ```
 Expected: `{"UserID":"11111111-1111-1111-1111-111111111111","Amount":10000,"Balance":...}`
+
+### Test 7: Get Wallet
+```bash
+curl http://localhost:8080/wallet/11111111-1111-1111-1111-111111111111
+```
+Expected: `{"wallet_id":"...","user_id":"11111111-1111-1111-1111-111111111111","balance":...,"created_at":"...","updated_at":"..."}`
+
+### Test 8: Get Wallet - Not Found
+```bash
+curl http://localhost:8080/wallet/99999999-9999-9999-9999-999999999999
+```
+Expected: `{"error":"wallet not found"}`
 
 ## Testing with Postman
 
@@ -251,6 +285,23 @@ Create a new Collection called "Payment Service" with these requests:
 
 ---
 
+#### Request 5: Get Wallet
+- **Method:** GET
+- **URL:** `http://localhost:8080/wallet/11111111-1111-1111-1111-111111111111`
+- **Expected Response:**
+```json
+{
+  "wallet_id": "aaaaaaaa-1111-1111-1111-111111111111",
+  "user_id": "11111111-1111-1111-1111-111111111111",
+  "balance": 1010000,
+  "version": 1,
+  "created_at": "2024-01-10T08:00:00Z",
+  "updated_at": "2024-01-15T14:30:00Z"
+}
+```
+
+---
+
 ### 3. Test Scenarios
 
 | Scenario | Expected Result |
@@ -259,6 +310,7 @@ Create a new Collection called "Payment Service" with these requests:
 | **Test 2:** Duplicate reference ID (use tx-001 again) | `"error":"reference ID already exists"` |
 | **Test 3:** Negative amount (for transfer) | `"error":"amount must be greater than zero"` |
 | **Test 4:** Negative amount (for top-up) | `"error":"amount must be greater than zero"` |
+| **Test 5:** Get wallet for non-existent user | `"error":"wallet not found"` |
 
 ---
 
@@ -321,6 +373,8 @@ payment-service/
 - ✅ Database transactions with row locking (SELECT FOR UPDATE)
 - ✅ Idempotency using reference IDs
 - ✅ Balance validation (no negative balance)
+- ✅ Wallet top-up functionality
+- ✅ Get wallet details with timestamps
 - ✅ Clean Architecture (Domain → Usecase → Repository → Delivery)
 
 ## Troubleshooting

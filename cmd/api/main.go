@@ -45,13 +45,14 @@ func main() {
 
 	// Tambahkan health check endpoint
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-	    w.WriteHeader(http.StatusOK)
-	    w.Write([]byte("Payment Service is running"))
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Payment Service is running"))
 	})
-	
+
 	r.Post("/transfer", handler.Transfer)
 	r.Post("/topup", handler.TopUp)
 	r.Get("/transaction/{refId}", handler.GetTransaction)
+	r.Get("/wallet/{userId}", handler.GetWallet)
 
 	log.Println("Starting server on :8080")
 	if err := http.ListenAndServe(":8080", r); err != nil {

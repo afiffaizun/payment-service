@@ -91,3 +91,13 @@ func (r *PostgresRepo) TopUpWallet(tx interface{}, userID string, amount int64) 
 	return nil
 }
 
+func (r *PostgresRepo) GetWalletByUserID(userID string) (*domain.Wallet, error) {
+	query := `SELECT id, user_id, balance, version, created_at, updated_at FROM wallets WHERE user_id = $1`
+	row := r.db.QueryRow(query, userID)
+	var w domain.Wallet
+	err := row.Scan(&w.ID, &w.UserID, &w.Balance, &w.Version, &w.CreatedAt, &w.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &w, nil
+}

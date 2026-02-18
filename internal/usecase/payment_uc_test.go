@@ -61,6 +61,14 @@ func (m *MockTransactionRepository) TopUpWallet(tx interface{}, userID string, a
 	return args.Error(0)
 }
 
+func (m *MockTransactionRepository) GetWalletByUserID(userID string) (*domain.Wallet, error) {
+	args := m.Called(userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.Wallet), args.Error(1)
+}
+
 func TestTopUpWallet(t *testing.T) {
 	mockRepo := new(MockTransactionRepository)
 	uc := NewPaymentUsecase(mockRepo)
@@ -91,7 +99,7 @@ func TestTopUpWallet(t *testing.T) {
 					Version: 1,
 				}, nil).Once()
 				mockRepo.On("CommitTx", mockTx).Return(nil).Once()
-				mockRepo.On("RollbackTx", mockTx).Return(nil).Maybe()
+				mockRepo.On("RollbackTx", mockTx).Return(nil).Once()
 			},
 			want: &TopUpResponse{
 				UserID:  "111",
@@ -133,7 +141,7 @@ func TestTopUpWallet(t *testing.T) {
 			mock: func() {
 				mockRepo.On("BeginTx").Return(mockTx, nil).Once()
 				mockRepo.On("TopUpWallet", mockTx, "111", int64(1000)).Return(errors.New("repo error")).Once()
-				mockRepo.On("RollbackTx", mockTx).Return(nil).Once()
+				mockRepo.On("RollbackTx", mock.Anything).Return(nil).Once()
 			},
 			want: nil,
 			err:  errors.New("repo error"),
@@ -148,7 +156,7 @@ func TestTopUpWallet(t *testing.T) {
 				mockRepo.On("BeginTx").Return(mockTx, nil).Once()
 				mockRepo.On("TopUpWallet", mockTx, "111", int64(1000)).Return(nil).Once()
 				mockRepo.On("GetWalletForUpdate", mockTx, "111").Return(nil, errors.New("wallet not found")).Once()
-				mockRepo.On("RollbackTx", mockTx).Return(nil).Once()
+				mockRepo.On("RollbackTx", mock.Anything).Return(nil).Once()
 			},
 			want: nil,
 			err:  errors.New("wallet not found"),
@@ -169,7 +177,7 @@ func TestTopUpWallet(t *testing.T) {
 					Version: 1,
 				}, nil).Once()
 				mockRepo.On("CommitTx", mockTx).Return(errors.New("commit error")).Once()
-				mockRepo.On("RollbackTx", mockTx).Return(nil).Maybe() // RollbackTx might or might not be called after CommitTx fails
+				mockRepo.On("RollbackTx", mock.Anything).Return(nil).Once()
 			},
 			want: nil,
 			err:  errors.New("commit error"),
